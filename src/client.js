@@ -24,10 +24,34 @@ class Client {
     return this.doPost(this.url + "/create_payment_intent", formData);
   }
 
+  updatePaymentIntent({ paymentIntentId, amount }) {
+    const formData = new URLSearchParams();
+    formData.append("payment_intent_id", paymentIntentId);
+    formData.append("amount", amount);
+    return this.doPost(this.url + "/update_payment_intent", formData);
+  }
+
+  cancelPaymentIntent({ paymentIntentId }) {
+    const formData = new URLSearchParams();
+    formData.append("payment_intent_id", paymentIntentId);
+    return this.doPost(this.url + "/cancel_payment_intent", formData);
+  }
+
+  confirmPaymentIntent({ paymentIntentId, paymentMethod }) {
+    const formData = new URLSearchParams();
+    formData.append("payment_intent_id", paymentIntentId);
+    formData.append("payment_method", paymentMethod);
+    return this.doPost(this.url + "/confirm_payment_intent", formData);
+  }
+
   capturePaymentIntent({ paymentIntentId }) {
     const formData = new URLSearchParams();
     formData.append("payment_intent_id", paymentIntentId);
     return this.doPost(this.url + "/capture_payment_intent", formData);
+  }
+
+  getPendingPaymentIntentList() {
+    return this.doGet(this.url + "/get_pending_payment_intent_list", {});
   }
 
   savePaymentMethodToCustomer({ paymentMethodId }) {
@@ -50,6 +74,26 @@ class Client {
     } else {
       let text = await response.text();
       throw new Error("Request Failed: " + text);
+    }
+  }
+
+  getQueryString(params) {
+    let esc = encodeURIComponent;
+    return Object.keys(params)
+      .map(k => esc(k) + '=' + esc(params[k]))
+      .join('&');
+  }
+
+  async doGet(url, params) {
+    let response = await fetch(url + '?' + this.getQueryString(params), {
+      method: "get",
+    });
+
+    if (response.ok) {
+      return response.json();
+    } else {
+      let text = await response.text();
+      throw new Error("Get request Failed: " + text);
     }
   }
 }

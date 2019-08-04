@@ -22,6 +22,19 @@ class CommonWorkflows extends React.Component {
             Common workflows
           </Text>
           <Group direction="column" spacing={8}>
+              <Button
+                  color="white"
+                  onClick={this.props.onClickCreatePaymentIntents}
+                  disabled={workFlowDisabled}
+                  justifyContent="left"
+              >
+                  <Group direction="row">
+                      <Icon icon="payments" />
+                      <Text color="blue" size={14}>
+                          Create Payment Intent
+                      </Text>
+                  </Group>
+              </Button>
             <Button
               color="white"
               onClick={this.props.onClickCollectCardPayments}

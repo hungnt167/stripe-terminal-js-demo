@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, {Component} from "react";
 
 import Client from "./client";
 import Logger from "./logger";
@@ -6,12 +6,14 @@ import Logger from "./logger";
 import BackendURLForm from "./Forms/BackendURLForm.jsx";
 import CommonWorkflows from "./Forms/CommonWorkflows.jsx";
 import CartForm from "./Forms/CartForm.jsx";
+import SaleForm from "./Forms/SaleForm.jsx";
 import ConnectionInfo from "./ConnectionInfo/ConnectionInfo.jsx";
 import Readers from "./Forms/Readers.jsx";
 import Group from "./components/Group/Group.jsx";
 import Logs from "./Logs/Logs.jsx";
+import {DataStorage} from "./services/DataStorage";
 
-import { css } from "emotion";
+import {css} from "emotion";
 
 class App extends Component {
   constructor(props) {
@@ -25,12 +27,24 @@ class App extends Component {
       readerLabel: "",
       registrationCode: "",
       cancelablePayment: false,
-      chargeAmount: 5100,
+      chargeAmount: 50,
       itemDescription: "Red t-shirt",
-      taxAmount: 100,
+      taxAmount: 0,
       currency: "usd",
       workFlowInProgress: null
     };
+  }
+
+  async componentDidMount() {
+    let backendURL = DataStorage.getBackendURL();
+    if (backendURL) {
+      this.onSetBackendURL(backendURL);
+    }
+    let reader = DataStorage.getReader();
+
+    if (reader && reader.id === 'SIMULATOR') {
+      await this.connectToSimulator();
+    }
   }
 
   isWorkflowDisabled = () =>
@@ -81,7 +95,7 @@ class App extends Component {
         "onConnectionStatusChange",
         "https://stripe.com/docs/terminal/js-api-reference#stripeterminal-create",
         ev => {
-          this.setState({ connectionStatus: ev.status, reader: null });
+          this.setState({connectionStatus: ev.status, reader: null});
         }
       )
     });
@@ -170,6 +184,7 @@ class App extends Component {
     if (connectResult.error) {
       console.log("Failed to connect:", connectResult.error);
     } else {
+      DataStorage.setReader(connectResult.reader);
       this.setState({
         status: "workflows",
         discoveredReaders: [],
@@ -223,6 +238,113 @@ class App extends Component {
     return;
   };
 
+  // 3b. create payment intent
+  createPaymentIntent = async () => {
+    try {
+      let createIntentResponse = await this.client.createPaymentIntent({
+        amount: this.state.chargeAmount + this.state.taxAmount,
+        currency: this.state.currency,
+        description: "Test Charge"
+      });
+      if (createIntentResponse.error) {
+        console.log("Collect payment method failed:", createIntentResponse.error.message);
+      } else {
+        DataStorage.addSale(createIntentResponse.paymentIntent);
+      }
+    } catch (e) {
+      // Suppress backend errors since they will be shown in logs
+      return;
+    }
+  };
+
+  // 3b. update payment intent
+  updatePaymentIntent = async (paymentIntentId, amount, callback) => {
+    try {
+      let updateResult = await this.client.updatePaymentIntent({
+        amount: amount,
+        paymentIntentId: paymentIntentId,
+      });
+
+      if (updateResult.error) {
+        alert(`Update failed: ${updateResult.error.message}`);
+      }
+      if (updateResult.paymentIntent) {
+        console.log("Update Payment Successful!", updateResult);
+        callback && callback(paymentIntentId, updateResult.paymentIntent)
+      }
+    } catch (e) {
+      alert(`Update failed: ${e.message}`);
+    }
+  };
+
+
+  // 3b. cancel payment intent
+  cancelPaymentIntent = async (paymentIntentId, callback) => {
+    try {
+      let cancelResult = await this.client.cancelPaymentIntent({
+        paymentIntentId: paymentIntentId,
+      });
+
+      if (cancelResult.error) {
+        alert(`Cancel failed: ${cancelResult.error.message}`);
+      }
+      if (cancelResult.paymentIntent) {
+        console.log("Cancel Payment Successful!", cancelResult);
+        callback && callback(paymentIntentId, cancelResult.paymentIntent)
+      }
+    } catch (e) {
+      alert(`Cancel failed: ${e.message}`)
+    }
+  };
+
+  // 3b. confirm payment intent
+  confirmPaymentIntent = async (paymentIntentId, paymentMethod, callback) => {
+    try {
+      let confirmResult = await this.client.confirmPaymentIntent({
+        paymentIntentId: paymentIntentId,
+        paymentMethod: paymentMethod,
+      });
+
+      if (confirmResult.error) {
+        alert(`Confirm failed: ${confirmResult.error.message}`);
+      }
+      if (confirmResult.paymentIntent) {
+        console.log("Confirm Payment Successful!", confirmResult);
+        callback && callback(paymentIntentId, confirmResult.paymentIntent)
+      }
+    } catch (e) {
+      alert(`Confirm failed: ${e.message}`);
+    }
+  };
+
+  // 3b. capture payment intent
+  capturePaymentIntent = async (paymentIntentId, callback) => {
+    let captureResult = await this.client.capturePaymentIntent({
+      paymentIntentId: paymentIntentId,
+    });
+
+    if (captureResult.error) {
+      alert(`Capture failed: ${captureResult.error.message}`);
+    }
+    if (captureResult.paymentIntent) {
+      console.log("Capture Payment Successful!", captureResult);
+      callback && callback(paymentIntentId, captureResult.paymentIntent)
+    }
+  };
+
+  // 3b. capture payment intent
+  getPendingPaymentIntentList = async (callback) => {
+    let result = await this.client.getPendingPaymentIntentList();
+
+    if (result.error) {
+      alert(`get PendingPaymentIntentList failed: ${result.error.message}`);
+    }
+    if (result.items) {
+      console.log("Capture Payment Successful!", result);
+      callback && callback(result.items)
+    }
+  };
+
   // 3b. Collect a card present payment
   collectCardPayment = async () => {
     // We want to reuse the same PaymentIntent object in the case of declined charges, so we
@@ -244,7 +366,7 @@ class App extends Component {
     const paymentMethodPromise = this.terminal.collectPaymentMethod(
       this.pendingPaymentIntentSecret
     );
-    this.setState({ cancelablePayment: true });
+    this.setState({cancelablePayment: true});
     const result = await paymentMethodPromise;
     if (result.error) {
       console.log("Collect payment method failed:", result.error.message);
@@ -253,7 +375,7 @@ class App extends Component {
         result.paymentIntent
       );
       // At this stage, the payment can no longer be canceled because we've sent the request to the network.
-      this.setState({ cancelablePayment: false });
+      this.setState({cancelablePayment: false});
       if (confirmResult.error) {
         alert(`Confirm failed: ${confirmResult.error.message}`);
       } else if (confirmResult.paymentIntent) {
@@ -278,7 +400,7 @@ class App extends Component {
   cancelPendingPayment = async () => {
     await this.terminal.cancelCollectPaymentMethod();
     this.pendingPaymentIntentSecret = null;
-    this.setState({ cancelablePayment: false });
+    this.setState({cancelablePayment: false});
   };
 
   // 3d. Save a card for re-use online.
@@ -290,6 +412,7 @@ class App extends Component {
     } else {
       try {
         // Then, pass the source to your backend client to save it to a customer
+        DataStorage.setSavedCard(readResult);
         let customer = await this.client.savePaymentMethodToCustomer({
           paymentMethodId: readResult.source.id
         });
@@ -305,25 +428,27 @@ class App extends Component {
   // 4. UI Methods
   onSetBackendURL = url => {
     this.initializeBackendClientAndTerminal(url);
-    this.setState({ backendURL: url });
+    localStorage.setItem('backendURL', url);
+    this.setState({backendURL: url});
   };
   updateChargeAmount = amount =>
-    this.setState({ chargeAmount: parseInt(amount, 10) });
+    this.setState({chargeAmount: parseInt(amount, 10)});
   updateItemDescription = description =>
-    this.setState({ itemDescription: description });
+    this.setState({itemDescription: description});
   updateTaxAmount = amount =>
-    this.setState({ taxAmount: parseInt(amount, 10) });
-  updateCurrency = currency => this.setState({ currency: currency });
+    this.setState({taxAmount: parseInt(amount, 10)});
+  updateCurrency = currency => this.setState({currency: currency});
 
   renderForm() {
     const {
       backendURL,
       cancelablePayment,
       reader,
-      discoveredReaders
+      discoveredReaders,
+      workFlowInProgress
     } = this.state;
     if (backendURL === null && reader === null) {
-      return <BackendURLForm onSetBackendURL={this.onSetBackendURL} />;
+      return <BackendURLForm onSetBackendURL={this.onSetBackendURL}/>;
     } else if (reader === null) {
       return (
         <Readers
@@ -339,6 +464,9 @@ class App extends Component {
         <>
           <CommonWorkflows
             workFlowDisabled={this.isWorkflowDisabled()}
+            onClickCreatePaymentIntents={() =>
+              this.runWorkflow("createPaymentIntent", this.createPaymentIntent)
+            }
             onClickCollectCardPayments={() =>
               this.runWorkflow("collectPayment", this.collectCardPayment)
             }
@@ -348,20 +476,22 @@ class App extends Component {
             onClickCancelPayment={this.cancelPendingPayment}
             cancelablePayment={cancelablePayment}
           />
-          <CartForm
-            workFlowDisabled={this.isWorkflowDisabled()}
-            onClickUpdateLineItems={() =>
-              this.runWorkflow("updateLineItems", this.updateLineItems)
+          <SaleForm
+            workFlowInProgress={workFlowInProgress}
+            updatePaymentIntent={(paymentIntentId, amount, callback) =>
+              this.runWorkflow("updatePaymentIntent", () => this.updatePaymentIntent(paymentIntentId, amount, callback))
             }
-            itemDescription={this.state.itemDescription}
-            chargeAmount={this.state.chargeAmount}
-            taxAmount={this.state.taxAmount}
-            currency={this.state.currency}
-            onChangeCurrency={currency => this.updateCurrency(currency)}
-            onChangeChargeAmount={amount => this.updateChargeAmount(amount)}
-            onChangeTaxAmount={amount => this.updateTaxAmount(amount)}
-            onChangeItemDescription={description =>
-              this.updateItemDescription(description)
+            confirmPaymentIntent={(paymentIntentId, paymentMethod, callback) =>
+              this.runWorkflow("confirmPaymentIntent", () => this.confirmPaymentIntent(paymentIntentId, paymentMethod, callback))
+            }
+            capturePaymentIntent={(paymentIntentId, callback) =>
+              this.runWorkflow("capturePaymentIntent", () => this.capturePaymentIntent(paymentIntentId, callback))
+            }
+            getPendingPaymentIntentList={(callback) =>
+              this.runWorkflow("getPendingPaymentIntentList", () => this.getPendingPaymentIntentList(callback))
+            }
+            onClickCancelPaymentIntent={(paymentIntentId, callback) =>
+              this.runWorkflow("cancelPaymentIntent", () => this.cancelPaymentIntent(paymentIntentId, callback))
             }
           />
         </>
@@ -369,8 +499,38 @@ class App extends Component {
     }
   }
 
+  renderCartForm() {
+    const {
+      backendURL,
+      reader,
+    } = this.state;
+    if (backendURL === null || reader === null) {
+      return null;
+    }
+    return (
+      <>
+        <CartForm
+          workFlowDisabled={this.isWorkflowDisabled()}
+          onClickUpdateLineItems={() =>
+            this.runWorkflow("updateLineItems", this.updateLineItems)
+          }
+          itemDescription={this.state.itemDescription}
+          chargeAmount={this.state.chargeAmount}
+          taxAmount={this.state.taxAmount}
+          currency={this.state.currency}
+          onChangeCurrency={currency => this.updateCurrency(currency)}
+          onChangeChargeAmount={amount => this.updateChargeAmount(amount)}
+          onChangeTaxAmount={amount => this.updateTaxAmount(amount)}
+          onChangeItemDescription={description =>
+            this.updateItemDescription(description)
+          }
+        />
+      </>
+    );
+  }
+
   render() {
-    const { backendURL, reader } = this.state;
+    const {backendURL, reader} = this.state;
     return (
       <div
         className={css`
@@ -399,7 +559,8 @@ class App extends Component {
 
               {this.renderForm()}
             </Group>
-            <Logs />
+            <Logs/>
+            {this.renderCartForm()}
           </Group>
         </Group>
       </div>

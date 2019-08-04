@@ -22,7 +22,7 @@ const commonCSS = {
 
 class Section extends React.Component {
   render() {
-    const { alignment, children, position } = this.props;
+    const { alignment, children, position, style } = this.props;
     let borderRadius;
     switch (position) {
       case "first":
@@ -45,6 +45,7 @@ class Section extends React.Component {
           borderRadius,
           ...alignment
         })}
+        style={style}
       >
         {children}
       </div>
