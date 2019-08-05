@@ -3,17 +3,49 @@ import * as React from "react";
 import Button from "../components/Button/Button.jsx";
 import Icon from "../components/Icon/Icon.jsx";
 import Group from "../components/Group/Group.jsx";
-import Link from "../components/Link/Link.jsx";
 import Section from "../components/Section/Section.jsx";
 import Text from "../components/Text/Text.jsx";
 import TextInput from "../components/TextInput/TextInput.jsx";
 import Select from "../components/Select/Select.jsx";
+
+const EMPTY_CUSTOMER={id:0,email:''};
 
 class CartForm extends React.Component {
   static CURRENCIES = [
     { value: "usd", label: "USD" },
     { value: "gbp", label: "GBP" }
   ];
+
+  constructor(props) {
+    super(props);
+    this.state = {
+      customer: {id:0},
+      customers: [EMPTY_CUSTOMER],
+    };
+  }
+
+
+  componentDidMount() {
+    const {getCustomerList} = this.props;
+    getCustomerList(customers => this.setState({customers:[EMPTY_CUSTOMER,...customers]}));
+  }
+
+  /**
+   *
+   * @param customerId
+   * @return {*}
+   */
+  getPaymentMethod(customerId) {
+    const customer = this.state.customers.find(item => item.id === customerId);
+    if (!customer) {
+      return null;
+    }
+    if (!customer.payment_methods.length) {
+      return null;
+    }
+
+    return customer.payment_methods[0].id;
+  }
 
   render() {
     return (
@@ -24,7 +56,7 @@ class CartForm extends React.Component {
               Cart configuration
             </Text>
           </Section>
-          <Section position="middle">
+          <Section position="last">
             <Group direction="column">
               <Group
                 direction="row"
@@ -87,6 +119,24 @@ class CartForm extends React.Component {
                   onChange={this.props.onChangeCurrency}
                 />
               </Group>
+              <Group
+                direction="row"
+                alignment={{
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}
+              >
+                <Text size={12} color="dark">
+                  Customer
+                </Text>
+                <Select
+                  valueKey={'id'}
+                  labelKey={'email'}
+                  items={this.state.customers}
+                  value={this.state.customer.id}
+                  onChange={(customerId) => this.props.onChangeCustomer(customerId, this.getPaymentMethod(customerId))}
+                />
+              </Group>
               <Button
                 color="white"
                 onClick={this.props.onClickUpdateLineItems}
@@ -101,17 +151,6 @@ class CartForm extends React.Component {
                 </Group>
               </Button>
             </Group>
-          </Section>
-          <Section position="last">
-            <Text size={12} color="lightGrey">
-              Test payment responses{" "}
-              <Link
-                href="https://stripe.com/docs/terminal/testing"
-                text="using amounts"
-                newWindow
-              />
-              .
-            </Text>
           </Section>
         </Group>
       </>

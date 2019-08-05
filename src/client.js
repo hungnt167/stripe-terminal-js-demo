@@ -16,11 +16,16 @@ class Client {
     return this.doPost(this.url + "/register_reader", formData);
   }
 
-  createPaymentIntent({ amount, currency, description }) {
+  createPaymentIntent({ amount, currency, description, customerId }) {
     const formData = new URLSearchParams();
     formData.append("amount", amount);
     formData.append("currency", currency);
     formData.append("description", description);
+
+    if (customerId) {
+      formData.append("customer_id", customerId);
+    }
+
     return this.doPost(this.url + "/create_payment_intent", formData);
   }
 
@@ -54,9 +59,18 @@ class Client {
     return this.doGet(this.url + "/get_pending_payment_intent_list", {});
   }
 
-  savePaymentMethodToCustomer({ paymentMethodId }) {
+  getCustomerList() {
+    return this.doGet(this.url + "/get_customer_list", {});
+  }
+
+  savePaymentMethodToCustomer({ paymentMethodId, customerId }) {
     const formData = new URLSearchParams();
     formData.append("payment_method_id", paymentMethodId);
+
+    if (customerId) {
+      formData.append("customer_id", customerId);
+    }
+
     return this.doPost(
       this.url + "/attach_payment_method_to_customer",
       formData

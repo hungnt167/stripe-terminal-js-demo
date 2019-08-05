@@ -7,6 +7,7 @@ import Section from "../components/Section/Section.jsx";
 import Text from "../components/Text/Text.jsx";
 import {DataStorage} from "../services/DataStorage";
 import TextInput from "../components/TextInput/TextInput";
+import Link from "../components/Link/Link";
 
 
 const CAPTURE_ABLE_STATUSES = [
@@ -56,7 +57,7 @@ class SaleForm extends React.Component {
    * @return {boolean}
    */
   saleCanCapture(sale) {
-    if (!DataStorage.getSavedCard()) {
+    if (!DataStorage.getSavedCard() && !this.props.paymentMethod) {
       return false;
     }
 
@@ -72,7 +73,7 @@ class SaleForm extends React.Component {
    * @param status
    * @return {string}
    */
-  iconForSale({ status }) {
+  iconForSale({status}) {
     if (status === 'canceled') {
       return 'cancel';
     }
@@ -114,7 +115,7 @@ class SaleForm extends React.Component {
       sale.amount,
       () => confirmPaymentIntent(
         sale.id,
-        DataStorage.getSavedCard(),
+        this.props.paymentMethod || DataStorage.getSavedCard(),
         () => capturePaymentIntent(sale.id, (paymentIntentId, result) => {
           // DataStorage.removeSavedCard();
           DataStorage.addSale(result);
@@ -197,7 +198,7 @@ class SaleForm extends React.Component {
             </Text>
           </Section>
           <Section position="middle" style={{
-            maxHeight: 140,
+            height: '55vh',
             overflowY: 'auto',
           }}>
             {
@@ -211,7 +212,7 @@ class SaleForm extends React.Component {
                     >
                       <Group direction="row">
 
-                        <Icon icon={ this.iconForSale(saleItem) }/>
+                        <Icon icon={this.iconForSale(saleItem)}/>
                         <Text color="blue" size={14}>
                           {saleItem.id}
                         </Text>
@@ -219,11 +220,22 @@ class SaleForm extends React.Component {
                     </Button>
                   </Group>
                   {
-                    this.saleCanCapture(saleItem) && sale.id === saleItem.id && this.actionContent(saleItem)
+                    this.saleCanCapture(saleItem) && sale && sale.id === saleItem.id && this.actionContent(saleItem)
                   }
                 </Fragment>
               ))
             }
+          </Section>
+          <Section position="last">
+            <Text size={12} color="lightGrey">
+              Test payment responses{" "}
+              <Link
+                href="https://stripe.com/docs/terminal/testing"
+                text="using amounts"
+                newWindow
+              />
+              .
+            </Text>
           </Section>
         </Group>
       </Fragment>

@@ -31,6 +31,7 @@ class App extends Component {
       itemDescription: "Red t-shirt",
       taxAmount: 0,
       currency: "usd",
+      customerId: null,
       workFlowInProgress: null
     };
   }
@@ -244,7 +245,8 @@ class App extends Component {
       let createIntentResponse = await this.client.createPaymentIntent({
         amount: this.state.chargeAmount + this.state.taxAmount,
         currency: this.state.currency,
-        description: "Test Charge"
+        description: "Test Charge",
+        customerId: this.state.customerId
       });
       if (createIntentResponse.error) {
         console.log("Collect payment method failed:", createIntentResponse.error.message);
@@ -337,10 +339,23 @@ class App extends Component {
     let result = await this.client.getPendingPaymentIntentList();
 
     if (result.error) {
-      alert(`get PendingPaymentIntentList failed: ${result.error.message}`);
+      alert(`get PendingPaymentIntent List failed: ${result.error.message}`);
     }
     if (result.items) {
-      console.log("Capture Payment Successful!", result);
+      console.log("PendingPaymentIntent List Successful!", result);
+      callback && callback(result.items)
+    }
+  };
+
+  // get Customer List
+  getCustomerList = async (callback) => {
+    let result = await this.client.getCustomerList();
+
+    if (result.error) {
+      alert(`get Customer List failed: ${result.error.message}`);
+    }
+    if (result.items) {
+      console.log("Customer List Successful!", result);
       callback && callback(result.items)
     }
   };
@@ -414,7 +429,8 @@ class App extends Component {
         // Then, pass the source to your backend client to save it to a customer
         DataStorage.setSavedCard(readResult);
         let customer = await this.client.savePaymentMethodToCustomer({
-          paymentMethodId: readResult.source.id
+          paymentMethodId: readResult.source.id,
+          customerId: this.state.customerId
         });
         console.log("Payment method saved to customer!", customer);
         return customer;
@@ -438,6 +454,7 @@ class App extends Component {
   updateTaxAmount = amount =>
     this.setState({taxAmount: parseInt(amount, 10)});
   updateCurrency = currency => this.setState({currency: currency});
+  updateCustomer = (customerId, paymentMethod) => this.setState({customerId,paymentMethod});
 
   renderForm() {
     const {
@@ -445,7 +462,6 @@ class App extends Component {
       cancelablePayment,
       reader,
       discoveredReaders,
-      workFlowInProgress
     } = this.state;
     if (backendURL === null && reader === null) {
       return <BackendURLForm onSetBackendURL={this.onSetBackendURL}/>;
@@ -475,29 +491,50 @@ class App extends Component {
             }
             onClickCancelPayment={this.cancelPendingPayment}
             cancelablePayment={cancelablePayment}
-          />
-          <SaleForm
-            workFlowInProgress={workFlowInProgress}
-            updatePaymentIntent={(paymentIntentId, amount, callback) =>
-              this.runWorkflow("updatePaymentIntent", () => this.updatePaymentIntent(paymentIntentId, amount, callback))
-            }
-            confirmPaymentIntent={(paymentIntentId, paymentMethod, callback) =>
-              this.runWorkflow("confirmPaymentIntent", () => this.confirmPaymentIntent(paymentIntentId, paymentMethod, callback))
-            }
-            capturePaymentIntent={(paymentIntentId, callback) =>
-              this.runWorkflow("capturePaymentIntent", () => this.capturePaymentIntent(paymentIntentId, callback))
-            }
-            getPendingPaymentIntentList={(callback) =>
-              this.runWorkflow("getPendingPaymentIntentList", () => this.getPendingPaymentIntentList(callback))
-            }
-            onClickCancelPaymentIntent={(paymentIntentId, callback) =>
-              this.runWorkflow("cancelPaymentIntent", () => this.cancelPaymentIntent(paymentIntentId, callback))
-            }
-          />
+            />
+            {this.renderCartForm()}
         </>
       );
     }
   }
+
+  renderSaleForm() {
+    const {
+      backendURL,
+      reader,
+      workFlowInProgress,
+      paymentMethod
+    } = this.state;
+    if (backendURL === null || reader === null) {
+      return null;
+    }
+    return (
+      <>
+
+        <SaleForm
+          paymentMethod={paymentMethod}
+          workFlowInProgress={workFlowInProgress}
+          updatePaymentIntent={(paymentIntentId, amount, callback) =>
+            this.runWorkflow("updatePaymentIntent", () => this.updatePaymentIntent(paymentIntentId, amount, callback))
+          }
+          confirmPaymentIntent={(paymentIntentId, paymentMethod, callback) =>
+            this.runWorkflow("confirmPaymentIntent", () => this.confirmPaymentIntent(paymentIntentId, paymentMethod, callback))
+          }
+          capturePaymentIntent={(paymentIntentId, callback) =>
+            this.runWorkflow("capturePaymentIntent", () => this.capturePaymentIntent(paymentIntentId, callback))
+          }
+          getPendingPaymentIntentList={(callback) =>
+            this.runWorkflow("getPendingPaymentIntentList", () => this.getPendingPaymentIntentList(callback))
+          }
+          onClickCancelPaymentIntent={(paymentIntentId, callback) =>
+            this.runWorkflow("cancelPaymentIntent", () => this.cancelPaymentIntent(paymentIntentId, callback))
+          }
+        />
+      </>
+    );
+
+  }
+
 
   renderCartForm() {
     const {
@@ -510,6 +547,7 @@ class App extends Component {
     return (
       <>
         <CartForm
+          getCustomerList={(callback)=> this.getCustomerList(callback)}
           workFlowDisabled={this.isWorkflowDisabled()}
           onClickUpdateLineItems={() =>
             this.runWorkflow("updateLineItems", this.updateLineItems)
@@ -518,6 +556,7 @@ class App extends Component {
           chargeAmount={this.state.chargeAmount}
           taxAmount={this.state.taxAmount}
           currency={this.state.currency}
+          onChangeCustomer={(customerId, paymentMethod) => this.updateCustomer(customerId, paymentMethod)}
           onChangeCurrency={currency => this.updateCurrency(currency)}
           onChangeChargeAmount={amount => this.updateChargeAmount(amount)}
           onChangeTaxAmount={amount => this.updateTaxAmount(amount)}
@@ -548,6 +587,12 @@ class App extends Component {
         <Group direction="column" spacing={30}>
           <Group direction="row" spacing={30} responsive>
             <Group direction="column" spacing={16} responsive>
+
+
+              {this.renderForm()}
+            </Group>
+            <Logs/>
+            <Group direction="column" spacing={16} responsive>
               {backendURL && (
                 <ConnectionInfo
                   backendURL={backendURL}
@@ -556,11 +601,8 @@ class App extends Component {
                   onClickDisconnect={this.disconnectReader}
                 />
               )}
-
-              {this.renderForm()}
+              {this.renderSaleForm()}
             </Group>
-            <Logs/>
-            {this.renderCartForm()}
           </Group>
         </Group>
       </div>

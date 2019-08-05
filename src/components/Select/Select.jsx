@@ -12,9 +12,17 @@ class Select extends React.Component {
   };
 
   render() {
+    let {valueKey, labelKey} = this.props;
+
+    if (!valueKey) {
+      valueKey = 'value';
+    }
+    if (!labelKey) {
+      labelKey = 'label';
+    }
     const items = this.props.items.map((item, index) => (
-      <option key={index} value={item.value}>
-        {item.label}
+      <option key={index} value={item[valueKey]}>
+        {item[labelKey]}
       </option>
     ));
 
