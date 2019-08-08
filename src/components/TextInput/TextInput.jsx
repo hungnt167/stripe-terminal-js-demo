@@ -8,9 +8,11 @@ class TextInput extends React.Component {
   };
 
   render() {
-    const { placeholder, value } = this.props;
+    const { placeholder, value, type, required } = this.props;
     return (
       <input
+        required={required || false}
+        type={type || "text"}
         placeholder={placeholder}
         value={value || ""}
         onChange={this.onChange}

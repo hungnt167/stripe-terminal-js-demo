@@ -23,7 +23,7 @@ class Client {
     formData.append("description", description);
 
     if (customerId) {
-      formData.append("customer_id", customerId);
+      formData.append("customer", customerId);
     }
 
     return this.doPost(this.url + "/create_payment_intent", formData);
@@ -61,6 +61,12 @@ class Client {
 
   getCustomerList() {
     return this.doGet(this.url + "/get_customer_list", {});
+  }
+
+  createNewCustomer({ email }) {
+    const formData = new URLSearchParams();
+    formData.append("email", email);
+    return this.doPost(this.url + "/create_customer", formData);
   }
 
   savePaymentMethodToCustomer({ paymentMethodId, customerId }) {

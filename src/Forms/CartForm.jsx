@@ -8,7 +8,6 @@ import Text from "../components/Text/Text.jsx";
 import TextInput from "../components/TextInput/TextInput.jsx";
 import Select from "../components/Select/Select.jsx";
 
-const EMPTY_CUSTOMER={id:0,email:''};
 
 class CartForm extends React.Component {
   static CURRENCIES = [
@@ -20,15 +19,9 @@ class CartForm extends React.Component {
     super(props);
     this.state = {
       customer: {id:0},
-      customers: [EMPTY_CUSTOMER],
     };
   }
 
-
-  componentDidMount() {
-    const {getCustomerList} = this.props;
-    getCustomerList(customers => this.setState({customers:[EMPTY_CUSTOMER,...customers]}));
-  }
 
   /**
    *
@@ -36,7 +29,7 @@ class CartForm extends React.Component {
    * @return {*}
    */
   getPaymentMethod(customerId) {
-    const customer = this.state.customers.find(item => item.id === customerId);
+    const customer = this.props.customers.find(item => item.id === customerId);
     if (!customer) {
       return null;
     }
@@ -132,7 +125,7 @@ class CartForm extends React.Component {
                 <Select
                   valueKey={'id'}
                   labelKey={'email'}
-                  items={this.state.customers}
+                  items={this.props.customers}
                   value={this.state.customer.id}
                   onChange={(customerId) => this.props.onChangeCustomer(customerId, this.getPaymentMethod(customerId))}
                 />

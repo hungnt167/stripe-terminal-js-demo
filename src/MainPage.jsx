@@ -15,6 +15,8 @@ import {DataStorage} from "./services/DataStorage";
 
 import {css} from "emotion";
 
+const EMPTY_CUSTOMER={id:0,email:''};
+
 class App extends Component {
   constructor(props) {
     super(props);
@@ -31,7 +33,9 @@ class App extends Component {
       itemDescription: "Red t-shirt",
       taxAmount: 0,
       currency: "usd",
-      customerId: null,
+      customerId: 0,
+      newCustomer: '',
+      customers: [EMPTY_CUSTOMER],
       workFlowInProgress: null
     };
   }
@@ -46,6 +50,32 @@ class App extends Component {
     if (reader && reader.id === 'SIMULATOR') {
       await this.connectToSimulator();
     }
+
+    await this.refreshCustomerList();
+  }
+
+  refreshCustomerList() {
+    return this.getCustomerList(customers => {
+      const {customerId} = this.state;
+      let newState = {customers:[EMPTY_CUSTOMER,...customers]};
+      if (String(customerId) === "0" || !customers.length) {
+        return this.setState(newState)
+      }
+
+      const currentCustomer = customers.find(customer => customer.id === customerId);
+
+      if (!currentCustomer) {
+        return this.setState(newState)
+      }
+
+      if (!currentCustomer.payment_methods || !currentCustomer.payment_methods.length) {
+        return this.setState(newState)
+      }
+
+      newState.paymentMethod = currentCustomer.payment_methods[0].id;
+      return this.setState(newState)
+
+    });
   }
 
   isWorkflowDisabled = () =>
@@ -242,12 +272,14 @@ class App extends Component {
   // 3b. create payment intent
   createPaymentIntent = async () => {
     try {
-      let createIntentResponse = await this.client.createPaymentIntent({
+      let payload = {
         amount: this.state.chargeAmount + this.state.taxAmount,
+        customerId: this.state.customerId,
         currency: this.state.currency,
         description: "Test Charge",
-        customerId: this.state.customerId
-      });
+      };
+
+      let createIntentResponse = await this.client.createPaymentIntent(payload);
       if (createIntentResponse.error) {
         console.log("Collect payment method failed:", createIntentResponse.error.message);
       } else {
@@ -359,6 +391,18 @@ class App extends Component {
       callback && callback(result.items)
     }
   };
+  // create New Customer
+  createNewCustomer = async (callback) => {
+    let result = await this.client.createNewCustomer({ email: this.state.newCustomer });
+
+    if (result.error) {
+      alert(`create New Customer failed: ${result.error.message}`);
+    }
+    if (result.id) {
+      console.log("create New Customer Successful!", result);
+      callback && callback(result)
+    }
+  };
 
   // 3b. Collect a card present payment
   collectCardPayment = async () => {
@@ -419,7 +463,7 @@ class App extends Component {
   };
 
   // 3d. Save a card for re-use online.
-  saveCardForFutureUse = async () => {
+  saveCardForFutureUse = async (callback) => {
     // First, read a card without charging it using `readReusableCard`
     const readResult = await this.terminal.readReusableCard();
     if (readResult.error) {
@@ -429,10 +473,11 @@ class App extends Component {
         // Then, pass the source to your backend client to save it to a customer
         DataStorage.setSavedCard(readResult);
         let customer = await this.client.savePaymentMethodToCustomer({
-          paymentMethodId: readResult.source.id,
+          paymentMethodId: readResult.payment_method.id,
           customerId: this.state.customerId
         });
         console.log("Payment method saved to customer!", customer);
+        callback && callback(customer);
         return customer;
       } catch (e) {
         // Suppress backend errors since they will be shown in logs
@@ -455,6 +500,7 @@ class App extends Component {
     this.setState({taxAmount: parseInt(amount, 10)});
   updateCurrency = currency => this.setState({currency: currency});
   updateCustomer = (customerId, paymentMethod) => this.setState({customerId,paymentMethod});
+  updateNewCustomer = (newCustomer) => this.setState({newCustomer});
 
   renderForm() {
     const {
@@ -462,6 +508,8 @@ class App extends Component {
       cancelablePayment,
       reader,
       discoveredReaders,
+      customerId,
+      newCustomer,
     } = this.state;
     if (backendURL === null && reader === null) {
       return <BackendURLForm onSetBackendURL={this.onSetBackendURL}/>;
@@ -480,14 +528,23 @@ class App extends Component {
         <>
           <CommonWorkflows
             workFlowDisabled={this.isWorkflowDisabled()}
-            onClickCreatePaymentIntents={() =>
+            newCustomer={newCustomer}
+            hasCustomer={String(customerId) !== "0"}
+            onChangeNewCustomer={(newCustomer) => this.updateNewCustomer(newCustomer)}
+            onClickCreateNewCustomer={() => this.runWorkflow('createCustomer', () => {
+              return this.createNewCustomer(async () => {
+                await this.setState({ newCustomer: '' });
+                this.refreshCustomerList();
+              })
+            })}
+            onClickCreatePaymentIntent={() =>
               this.runWorkflow("createPaymentIntent", this.createPaymentIntent)
             }
             onClickCollectCardPayments={() =>
               this.runWorkflow("collectPayment", this.collectCardPayment)
             }
             onClickSaveCardForFutureUse={() =>
-              this.runWorkflow("saveCard", this.saveCardForFutureUse)
+              this.runWorkflow("saveCard", () => this.saveCardForFutureUse(this.refreshCustomerList))
             }
             onClickCancelPayment={this.cancelPendingPayment}
             cancelablePayment={cancelablePayment}
@@ -514,6 +571,7 @@ class App extends Component {
         <SaleForm
           paymentMethod={paymentMethod}
           workFlowInProgress={workFlowInProgress}
+          workFlowDisabled={this.isWorkflowDisabled()}
           updatePaymentIntent={(paymentIntentId, amount, callback) =>
             this.runWorkflow("updatePaymentIntent", () => this.updatePaymentIntent(paymentIntentId, amount, callback))
           }
@@ -547,6 +605,7 @@ class App extends Component {
     return (
       <>
         <CartForm
+          customers={this.state.customers}
           getCustomerList={(callback)=> this.getCustomerList(callback)}
           workFlowDisabled={this.isWorkflowDisabled()}
           onClickUpdateLineItems={() =>

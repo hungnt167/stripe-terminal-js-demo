@@ -125,6 +125,7 @@ class SaleForm extends React.Component {
   }
 
   actionContent(sale) {
+    const {workFlowDisabled} = this.props;
     return (
       <Fragment>
         <Group
@@ -153,6 +154,7 @@ class SaleForm extends React.Component {
           }}
         >
           <Button
+            disabled={workFlowDisabled}
             color="white"
             onClick={() => this.onClickCancel()}
             justifyContent="left"
@@ -165,6 +167,7 @@ class SaleForm extends React.Component {
             </Group>
           </Button>
           <Button
+            disabled={workFlowDisabled}
             color="white"
             onClick={() => this.onClickCapture()}
             justifyContent="left"
@@ -220,7 +223,7 @@ class SaleForm extends React.Component {
                     </Button>
                   </Group>
                   {
-                    this.saleCanCapture(saleItem) && sale && sale.id === saleItem.id && this.actionContent(saleItem)
+                    this.saleCanCapture(saleItem) && sale && sale.id === saleItem.id && this.actionContent(sale)
                   }
                 </Fragment>
               ))
